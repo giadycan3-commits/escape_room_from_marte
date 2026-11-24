@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Missione Ares-5: Fuga da Marte</title>
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --danger: #ff4d4d;
+            --success: #00ff00;
+            --bg: #05070a;
+            --card-bg: rgba(26, 31, 44, 0.95);
+            --info-blue: #1e3a5f;
+            --highlight: #ffce00;
+            --mars-red: #96281b;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg);
+            color: #e0e0e0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+        }
+
+        /* Sfondo animato */
+        #stars-container {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -2;
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+        }
+
+        .star {
+            position: absolute;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.5;
+            animation: twinkle var(--duration) infinite;
+        }
+
+        @keyframes twinkle {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.2); }
+        }
+
+        /* Canvas per i fuochi d'artificio */
+        #fireworks-canvas {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
+        }
+
+        #game-container {
+            background: var(--card-bg);
+            border: 2px solid var(--primary);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(74, 144, 226, 0.3);
+            max-width: 850px;
+            width: 95%;
+            position: relative;
+            backdrop-filter: blur(10px);
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+        }
+
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 1.1em;
+            color: var(--success);
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(74, 144, 226, 0.3);
+            font-family: 'Courier New', monospace;
+        }
+
+        .lives-container { color: var(--danger); font-size: 1.4em; }
+        .score-container { color: var(--highlight); font-weight: bold; }
+
+        .section { display: none; overflow-y: auto; flex-grow: 1; padding: 10px; }
+        .active { display: block; }
+
+        h1 { font-size: 1.6em; color: var(--primary); text-transform: uppercase; margin-top: 0; }
+        h2 { color: var(--highlight); font-size: 1.2em; border-bottom: 1px solid #444; padding-bottom: 5px; }
+        
+        .info-block {
+            background: var(--info-blue);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 10px 0;
+            border: 1px solid var(--primary);
+            animation: fadeIn 0.5s ease;
+        }
+
+        .planet-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            text-align: left;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+
+        .data-label { color: var(--primary); font-weight: bold; text-transform: uppercase; font-size: 0.8em; }
+        .data-value { color: #fff; }
+
+        .nav-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #333;
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 5px;
+            transition: 0.3s;
+            text-transform: uppercase;
+        }
+
+        button:disabled { background: #333; color: #777; cursor: not-allowed; }
+        button:hover:not(:disabled) { background: #357abd; box-shadow: 0 0 10px var(--primary); }
+
+        .btn-challenge { background: var(--success); color: #000; width: 100%; margin-top: 20px; font-size: 1.1em; }
+
+        input {
+            background: #000;
+            border: 1px solid var(--primary);
+            color: var(--success);
+            padding: 15px;
+            width: 100%;
+            font-size: 1.4em;
+            text-align: center;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .error-msg { 
+            color: var(--danger); 
+            font-weight: bold; 
+            margin-bottom: 10px; 
+            display: none; 
+            padding: 10px;
+            background: rgba(255, 77, 77, 0.1);
+            border-radius: 5px;
+        }
+
+        /* --- ANIMAZIONE RAZZO --- */
+        #win-animation-viewport {
+            position: relative;
+            height: 300px;
+            width: 100%;
+            background: linear-gradient(to top, #411d1d, #05070a);
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            border: 1px solid #444;
+        }
+
+        .mars-ground {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            height: 40px;
+            background: var(--mars-red);
+            transition: transform 3s ease-in;
+        }
+
+        #rocket-wrapper {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 60px;
+            transition: all 4s cubic-bezier(.47,0,.74,.71);
+            z-index: 5;
+        }
+
+        .rocket-svg {
+            width: 100%;
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.2));
+        }
+
+        .engine-flame {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 30px;
+            height: 60px;
+            background: radial-gradient(ellipse at top, #fff, #ffce00, #ff4d4d, transparent);
+            border-radius: 0 0 50% 50%;
+            display: none;
+            animation: flame-pulse 0.1s infinite alternate;
+        }
+
+        @keyframes flame-pulse {
+            from { height: 50px; opacity: 0.8; transform: translateX(-50%) scaleX(0.9); }
+            to { height: 75px; opacity: 1; transform: translateX(-50%) scaleX(1.1); }
+        }
+
+        .launching #rocket-wrapper {
+            bottom: 500px;
+            transform: translateX(-50%) scale(0.2);
+        }
+
+        .launching .mars-ground {
+            transform: translateY(100px);
+        }
+
+        /* --- FINE ANIMAZIONE RAZZO --- */
+
+        #hint-modal {
+            display: none;
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: #1a1f2c;
+            border: 2px solid var(--success);
+            padding: 20px;
+            width: 80%;
+            z-index: 110;
+            border-radius: 10px;
+            text-align: center;
+            box-shadow: 0 0 100px #000;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        .shake { animation: shake 0.2s ease-in-out 2; }
+    </style>
+</head>
+<body>
+
+<div id="stars-container"></div>
+<canvas id="fireworks-canvas"></canvas>
+
+<div id="game-container">
+    <!-- Modal Aiuto -->
+    <div id="hint-modal">
+        <h3 style="color: var(--success); margin-top: 0;">SUPPORTO SCIENTIFICO</h3>
+        <p id="hint-text" style="margin-bottom: 20px;"></p>
+        <button onclick="closeHint()">RICEVUTO</button>
+    </div>
+
+    <!-- HUD Arcade -->
+    <div id="hud" style="display: none;">
+        <div class="status-bar">
+            <div class="lives-container" id="lives-display">❤️❤️❤️</div>
+            <div class="score-container">CARBURANTE: <span id="score-display">0000</span> L</div>
+        </div>
+    </div>
+
+    <!-- INTRODUZIONE -->
+    <div id="intro" class="section active">
+        <h1>Diario di Bordo: Emergenza Marte</h1>
+        <div class="info-block">
+            <p><b>Anno 2084.</b> La missione Ares-5 ha completato i rilievi, ma una tempesta elettromagnetica ha azzerato le riserve di carburante.</p>
+            <p>Sei bloccato sulla polverosa superficie di Marte. Devi riattivare i protocolli di sintesi chimica rispondendo correttamente ai test dell'IA di bordo.</p>
+            <p style="color: var(--highlight);">Ogni vittoria ripristina il carburante. Se esaurisci l'integrità del sistema (vite), rimarrai per sempre sul pianeta rosso.</p>
+        </div>
+        <button class="btn-challenge" onclick="startGame()">INIZIA RIFORNIMENTO</button>
+    </div>
+
+    <!-- LIVELLO 1 INFO -->
+    <div id="info1" class="section">
+        <h1>Database: Sistema Solare</h1>
+        <div id="planet-browser" class="info-block">
+            <h2 id="p-name" style="margin-top:0; color:var(--success)">Mercurio</h2>
+            <div class="planet-grid">
+                <div><span class="data-label">Tipo:</span><br><span id="p-type" class="data-value">Roccioso</span></div>
+                <div><span class="data-label">Gravità:</span><br><span id="p-grav" class="data-value">3.7 m/s²</span></div>
+                <div><span class="data-label">Atmosfera:</span><br><span id="p-atmo" class="data-value">Esosfera</span></div>
+                <div><span class="data-label">Scoperta:</span><br><span id="p-disc" class="data-value">Antichità</span></div>
+                <div><span class="data-label">Telescopio:</span><br><span id="p-tele" class="data-value">Galileo (1610)</span></div>
+                <div><span class="data-label">Curiosità:</span><br><span id="p-fact" class="data-value">Nessun satellite naturale.</span></div>
+            </div>
+        </div>
+        <div class="nav-controls">
+            <button id="prev-p" onclick="navPlanet(-1)">Indietro</button>
+            <span id="p-index">Pianeta 1 di 8</span>
+            <button id="next-p" onclick="navPlanet(1)">Avanti</button>
+        </div>
+        <button id="start-q1" class="btn-challenge" style="display:none" onclick="goToChallenge(1)">AVVIA TEST DI SBLOCCO</button>
+    </div>
+
+    <!-- LIVELLO 1 CHALLENGE -->
+    <div id="step1" class="section">
+        <h1>Test 01: Sequenza Planetaria</h1>
+        <p>Inserisci le <b>iniziali</b> degli 8 pianeti studiati, in ordine di distanza dal Sole.</p>
+        <input type="text" id="ans1" placeholder="8 lettere (es. MVTM...)" maxlength="8" autocomplete="off">
+        <div id="err1" class="error-msg"></div>
+        <button onclick="checkStep1()" style="width:100%">Esegui Calcolo</button>
+        <button class="hint-btn" onclick="showHint(1)" style="margin-top:10px; background: transparent; border: 1px solid #555; width: auto; font-size: 0.8em;">Aiuto (-50 L)</button>
+    </div>
+
+    <!-- LIVELLO 2 INFO -->
+    <div id="info2" class="section">
+        <h1>Archivio: Dinamica Terrestre</h1>
+        <div id="earth-browser" class="info-block">
+            <h2 id="e-title">I Moti della Terra</h2>
+            <div id="e-content" style="font-size: 0.95em; text-align: left;"></div>
+        </div>
+        <div class="nav-controls">
+            <button id="prev-e" onclick="navEarth(-1)">Indietro</button>
+            <span id="e-index">Dato 1 di 4</span>
+            <button id="next-e" onclick="navEarth(1)">Avanti</button>
+        </div>
+        <button id="start-q2" class="btn-challenge" style="display:none" onclick="goToChallenge(2)">VAI ALLA SINCRONIZZAZIONE</button>
+    </div>
+
+    <!-- LIVELLO 2 CHALLENGE -->
+    <div id="step2" class="section">
+        <h1>Test 02: Sincronizzazione</h1>
+        <p>Componi il codice: (Ore Rotazione) + (Giorni Anno) + (Mesi tra Equinozio e Solstizio)</p>
+        <input type="text" id="ans2" placeholder="Codice Numerico">
+        <div id="err2" class="error-msg"></div>
+        <button onclick="checkStep2()" style="width:100%">Connetti</button>
+    </div>
+
+    <!-- LIVELLO 3 INFO -->
+    <div id="info3" class="section">
+        <h1>Ciclo Lunare</h1>
+        <div class="info-block">
+            <p>La Luna attraversa 4 fasi ogni mese (circa 28 giorni):</p>
+            <ul>
+                <li><b>Giorno 0:</b> Luna Nuova (Invisibile).</li>
+                <li><b>Giorno 7:</b> Primo Quarto.</li>
+                <li><b>Giorno 14:</b> Luna Piena (Massima illuminazione).</li>
+                <li><b>Giorno 21:</b> Ultimo Quarto.</li>
+            </ul>
+        </div>
+        <button class="btn-challenge" onclick="goToChallenge(3)">IMPOSTA FINESTRA DI LANCIO</button>
+    </div>
+
+    <div id="step3" class="section">
+        <h1>Test 03: Lancio Lunare</h1>
+        <p>Se oggi è Luna Nuova, quale fase ci sarà tra 14 giorni esatti?</p>
+        <input type="text" id="ans3" placeholder="Fase lunare">
+        <div id="err3" class="error-msg"></div>
+        <button onclick="checkStep3()" style="width:100%">Verifica</button>
+    </div>
+
+    <!-- LIVELLO 4 INFO -->
+    <div id="info4" class="section">
+        <h1>Archivio: Satelliti Galileiani</h1>
+        <div id="moon-browser" class="info-block">
+            <h2 id="m-name" style="margin-top:0; color:var(--success)">Io</h2>
+            <div class="planet-grid">
+                <div><span class="data-label">Attività:</span><br><span id="m-activity" class="data-value"></span></div>
+                <div><span class="data-label">Superficie:</span><br><span id="m-surface" class="data-value"></span></div>
+                <div><span class="data-label">Dimensione:</span><br><span id="m-size" class="data-value"></span></div>
+                <div><span class="data-label">Interesse:</span><br><span id="m-interest" class="data-value"></span></div>
+            </div>
+        </div>
+        <div class="nav-controls">
+            <button id="prev-m" onclick="navMoon(-1)">Indietro</button>
+            <span id="m-index">Luna 1 di 4</span>
+            <button id="next-m" onclick="navMoon(1)">Avanti</button>
+        </div>
+        <button id="start-q4" class="btn-challenge" style="display:none" onclick="goToChallenge(4)">ATTIVA MOTORI FINALI</button>
+    </div>
+
+    <!-- LIVELLO 4 CHALLENGE -->
+    <div id="step4" class="section">
+        <h1>Test Finale: Codice Galileo</h1>
+        <p>Quante sono in totale le lune principali (Galileiane) scoperte su Giove?</p>
+        <input type="number" id="ans4">
+        <div id="err4" class="error-msg"></div>
+        <button onclick="checkStep4()" style="width:100%">DECOLLA</button>
+    </div>
+
+    <!-- VITTORIA -->
+    <div id="win" class="section">
+        <h1 style="color: var(--success); font-size: 2.2em;">DECOLLO RIUSCITO!</h1>
+        
+        <div id="win-animation-viewport">
+            <div class="mars-ground"></div>
+            <div id="rocket-wrapper">
+                <div class="engine-flame" id="flame-element"></div>
+                <svg class="rocket-svg" viewBox="0 0 50 100">
+                    <path d="M25 5 L42 40 L42 85 L8 85 L8 40 Z" fill="#eee" />
+                    <path d="M25 5 L42 40 L8 40 Z" fill="#ff4d4d" />
+                    <path d="M8 65 L0 90 L8 90 Z" fill="#4a90e2" />
+                    <path d="M42 65 L50 90 L42 90 Z" fill="#4a90e2" />
+                    <circle cx="25" cy="55" r="6" fill="#1e3a5f" stroke="white" stroke-width="1" />
+                    <rect x="22" y="85" width="6" height="5" fill="#333" />
+                </svg>
+            </div>
+        </div>
+
+        <div class="info-block">
+            <p>Sei riuscito a fuggire da Marte! La rotta verso la Terra è impostata.</p>
+            <h2 style="color:var(--highlight)">CARBURANTE RESIDUO: <span id="final-score">0</span> L</h2>
+        </div>
+        <button onclick="location.reload()">RICOMINCIA MISSIONE</button>
+    </div>
+
+    <!-- GAME OVER -->
+    <div id="game-over" class="section">
+        <h1 style="color: var(--danger); font-size: 2.5em;">MISSIONE FALLITA</h1>
+        <div class="info-block">
+            <p>I sistemi sono critici. Sei rimasto senza vita su Marte.</p>
+        </div>
+        <button onclick="location.reload()">RIPROVA</button>
+    </div>
+</div>
+
+<script>
+    // DATI
+    const planetsData = [
+        { name: "Mercurio", type: "Roccioso", grav: "3.7 m/s²", atmo: "Esosfera", disc: "Antichità", tele: "Galileo (1610)", fact: "Pianeta più vicino al Sole." },
+        { name: "Venere", type: "Roccioso", grav: "8.87 m/s²", atmo: "CO2 (Altissima pressione)", disc: "Antichità", tele: "Galileo (1610)", fact: "Il più caldo per effetto serra." },
+        { name: "Terra", type: "Roccioso", grav: "9.81 m/s²", atmo: "N2, O2", disc: "N/A", tele: "N/A", fact: "Presenza di acqua liquida." },
+        { name: "Marte", type: "Roccioso", grav: "3.71 m/s²", atmo: "Sottile CO2", disc: "Antichità", tele: "Galileo (1610)", fact: "Pianeta Rosso, sede missione Ares." },
+        { name: "Giove", type: "Gassoso", grav: "24.79 m/s²", atmo: "H, He", disc: "Antichità", tele: "Galileo (1610)", fact: "Il gigante del sistema." },
+        { name: "Saturno", type: "Gassoso", grav: "10.44 m/s²", atmo: "H, He", disc: "Antichità", tele: "Galileo (1610)", fact: "Nobilita il cielo con i suoi anelli." },
+        { name: "Urano", type: "Ghiaccio", grav: "8.69 m/s²", atmo: "H, He, CH4", disc: "Herschel (1781)", tele: "Herschel (1781)", fact: "Ruota su un asse quasi orizzontale." },
+        { name: "Nettuno", type: "Ghiaccio", grav: "11.15 m/s²", atmo: "H, He, CH4", disc: "Le Verrier (1846)", tele: "J. Galle (1846)", fact: "Il più lontano dal Sole." }
+    ];
+
+    const earthData = [
+        { title: "Rotazione", content: "Dura <b>24 ore</b>. Causa il ciclo giorno-notte." },
+        { title: "Rivoluzione", content: "Dura <b>365 giorni</b>. Definisce la durata dell'anno." },
+        { title: "Stagioni", content: "L'inclinazione dell'asse causa le stagioni. Tra un equinozio e il solstizio successivo passano <b>3 mesi</b>." },
+        { title: "Anno Bisestile", content: "Ogni 4 anni aggiungiamo un giorno per compensare le 6 ore extra annue." }
+    ];
+
+    const moonsData = [
+        { name: "Io", activity: "Vulcanica", surface: "Zolfo", size: "Luna-simile", interest: "Più vulcani di ogni altro corpo." },
+        { name: "Europa", activity: "Tetto-ghiaccio", surface: "Crosta liscia", size: "Piccola Luna", interest: "Oceano sotterraneo ipotizzato." },
+        { name: "Ganimede", activity: "Magnetica", surface: "Ghiaccio/Roccia", size: "Più di Mercurio", interest: "Luna più grande del sistema." },
+        { name: "Callisto", activity: "Inattiva", surface: "Craterizzata", size: "Quasi Mercurio", interest: "Corpo più antico del sistema." }
+    ];
+
+    // STATO
+    let score = 0;
+    let lives = 3;
+    let currentPlanetIdx = 0;
+    let currentEarthIdx = 0;
+    let currentMoonIdx = 0;
+
+    function startGame() {
+        document.getElementById('intro').classList.remove('active');
+        document.getElementById('hud').style.display = 'flex';
+        goToInfo(1);
+    }
+
+    function updateHUD() {
+        document.getElementById('score-display').innerText = score.toString().padStart(4, '0');
+        document.getElementById('lives-display').innerText = "❤️".repeat(lives);
+        if (lives <= 0) endGame(false);
+    }
+
+    // NAVIGAZIONE INFO
+    function navPlanet(dir) {
+        currentPlanetIdx = Math.max(0, Math.min(7, currentPlanetIdx + dir));
+        if (currentPlanetIdx === 7) document.getElementById('start-q1').style.display = 'block';
+        updatePlanetUI();
+    }
+    function navEarth(dir) {
+        currentEarthIdx = Math.max(0, Math.min(3, currentEarthIdx + dir));
+        if (currentEarthIdx === 3) document.getElementById('start-q2').style.display = 'block';
+        updateEarthUI();
+    }
+    function navMoon(dir) {
+        currentMoonIdx = Math.max(0, Math.min(3, currentMoonIdx + dir));
+        if (currentMoonIdx === 3) document.getElementById('start-q4').style.display = 'block';
+        updateMoonUI();
+    }
+
+    function updatePlanetUI() {
+        const p = planetsData[currentPlanetIdx];
+        const fields = ['name','type','grav','atmo','disc','tele','fact'];
+        fields.forEach(f => document.getElementById('p-'+f).innerText = p[f]);
+        document.getElementById('p-index').innerText = `Pianeta ${currentPlanetIdx+1} di 8`;
+        document.getElementById('prev-p').disabled = currentPlanetIdx === 0;
+    }
+    function updateEarthUI() {
+        const e = earthData[currentEarthIdx];
+        document.getElementById('e-title').innerText = e.title;
+        document.getElementById('e-content').innerHTML = e.content;
+        document.getElementById('e-index').innerText = `Dato ${currentEarthIdx+1} di 4`;
+        document.getElementById('prev-e').disabled = currentEarthIdx === 0;
+    }
+    function updateMoonUI() {
+        const m = moonsData[currentMoonIdx];
+        const fields = ['name','activity','surface','size','interest'];
+        fields.forEach(f => document.getElementById('m-'+f).innerText = m[f]);
+        document.getElementById('m-index').innerText = `Luna ${currentMoonIdx+1} di 4`;
+        document.getElementById('prev-m').disabled = currentMoonIdx === 0;
+    }
+
+    // CONTROLLO RISPOSTE
+    function handleWrongAnswer(n) {
+        lives--;
+        score = Math.max(0, score - 50);
+        document.getElementById('game-container').classList.add('shake');
+        setTimeout(() => document.getElementById('game-container').classList.remove('shake'), 400);
+        showError(n, "ATTENZIONE: Errore rilevato. Integrità scafo -1.");
+        updateHUD();
+    }
+
+    function checkStep1() {
+        if (document.getElementById('ans1').value.toUpperCase().trim() === "MVTMGSUN") {
+            score += 250; goToInfo(2); updateHUD();
+        } else handleWrongAnswer(1);
+    }
+    function checkStep2() {
+        if (document.getElementById('ans2').value.trim() === "243653") {
+            score += 250; goToInfo(3); updateHUD();
+        } else handleWrongAnswer(2);
+    }
+    function checkStep3() {
+        let v = document.getElementById('ans3').value.toLowerCase().trim();
+        if (v === "luna piena" || v === "piena") {
+            score += 250; goToInfo(4); updateHUD();
+        } else handleWrongAnswer(3);
+    }
+    function checkStep4() {
+        if (document.getElementById('ans4').value === "4") {
+            score += 500; endGame(true);
+        } else handleWrongAnswer(4);
+    }
+
+    function goToChallenge(n) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.getElementById('step' + n).classList.add('active');
+    }
+    function goToInfo(n) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.getElementById('info' + n).classList.add('active');
+    }
+
+    function showError(n, msg) {
+        const el = document.getElementById('err' + n);
+        el.innerText = msg; el.style.display = 'block';
+        setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    function showHint(n) {
+        const h = { 
+            1: "Mercurio, Venere, Terra, Marte, Giove, Saturno, Urano, Nettuno.",
+            2: "Codice: 24 (ore) + 365 (giorni) + 3 (mesi)."
+        };
+        score = Math.max(0, score - 50);
+        document.getElementById('hint-text').innerText = h[n];
+        document.getElementById('hint-modal').style.display = 'block';
+        updateHUD();
+    }
+    function closeHint() { document.getElementById('hint-modal').style.display = 'none'; }
+
+    // FINE GIOCO
+    function endGame(victory) {
+        document.getElementById('hud').style.display = 'none';
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        if (victory) {
+            document.getElementById('win').classList.add('active');
+            document.getElementById('final-score').innerText = score;
+            
+            // Sequenza di Lancio
+            setTimeout(() => {
+                document.getElementById('game-container').classList.add('shake'); // Vibrazione iniziale
+                document.getElementById('flame-element').style.display = 'block'; // Accensione fiamma
+                
+                setTimeout(() => {
+                    document.getElementById('game-container').classList.remove('shake');
+                    document.getElementById('win-animation-viewport').classList.add('launching'); // Decollo
+                    startFireworks();
+                }, 1000);
+            }, 500);
+
+        } else {
+            document.getElementById('game-over').classList.add('active');
+        }
+    }
+
+    // FUOCHI D'ARTIFICIO
+    function startFireworks() {
+        const canvas = document.getElementById('fireworks-canvas');
+        canvas.style.display = 'block';
+        const ctx = canvas.getContext('2d');
+        let fwParticles = [];
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x; this.y = y;
+                this.color = color;
+                this.velocity = { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 };
+                this.alpha = 1;
+                this.friction = 0.96;
+            }
+            draw() {
+                ctx.globalAlpha = this.alpha;
+                ctx.beginPath(); ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+                ctx.fillStyle = this.color; ctx.fill();
+            }
+            update() {
+                this.velocity.x *= this.friction; this.velocity.y *= this.friction;
+                this.x += this.velocity.x; this.y += this.velocity.y;
+                this.alpha -= 0.01;
+            }
+        }
+
+        function spawn() {
+            if (document.getElementById('win').classList.contains('active')) {
+                const x = Math.random() * canvas.width;
+                const y = Math.random() * (canvas.height / 2);
+                const color = `hsl(${Math.random() * 360}, 100%, 50%)`;
+                for (let i = 0; i < 40; i++) fwParticles.push(new Particle(x, y, color));
+                setTimeout(spawn, 500);
+            }
+        }
+        function animate() {
+            ctx.fillStyle = 'rgba(0,0,0,0.1)';
+            ctx.fillRect(0,0,canvas.width, canvas.height);
+            fwParticles.forEach((p, i) => {
+                if (p.alpha > 0) { p.update(); p.draw(); }
+                else fwParticles.splice(i, 1);
+            });
+            requestAnimationFrame(animate);
+        }
+        spawn(); animate();
+    }
+
+    // STELLE
+    const container = document.getElementById('stars-container');
+    for (let i = 0; i < 150; i++) {
+        const s = document.createElement('div');
+        s.className = 'star';
+        s.style.left = Math.random() * 100 + '%';
+        s.style.top = Math.random() * 100 + '%';
+        s.style.width = (Math.random() * 2 + 1) + 'px';
+        s.style.setProperty('--duration', (Math.random() * 3 + 2) + 's');
+        container.appendChild(s);
+    }
+
+    updatePlanetUI();
+    updateEarthUI();
+    updateMoonUI();
+</script>
+</body>
+</html>
